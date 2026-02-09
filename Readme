@@ -1,0 +1,31 @@
+This is a project that will display a map of the last position of the Tesla car.
+
+There are tree cars in the database, but this service will be configured to display only one of them.
+
+One car will be default, but you can change it via system env.
+
+There will be a /select page where you can select the car to display. and then per car will have /car/{id} page to display the map of the last position of the car.
+
+
+
+The map page will display the last position of the car.
+It will also display the last time the position was updated and the speed of the car at that time.
+
+It will ask for location of the user, and if the user allows it, it will display the distance and eta from the car to the user.
+
+Its suppose to show like a "Your car is here" and "Your location is here" on the map, and a line between them.
+
+Our data is being captured by teslamate.
+
+The service will be deployed on Kubernetes.
+
+It will have car.sindrema.com as the domain name, and it will be accessible via https.
+
+Frontend should be in Vue.js and backend in Go.
+
+If vue supports server side rendering, lets just query the data on the server side and render the page with the data, instead of doing it on the client side.
+
+If not, then lets create a simple API in Go that will query the data from the database and return it as JSON, and then the frontend will fetch the data and render it.
+
+Just create a openapi spec for the API, and then we can use it to create the backend later.
+

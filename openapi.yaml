@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: TeslaMap API
+  description: API for viewing Tesla car positions from TeslaMate data
+  version: 1.0.0
+servers:
+  - url: https://car.sindrema.com/api
+paths:
+  /cars:
+    get:
+      summary: List all cars
+      operationId: listCars
+      responses:
+        "200":
+          description: Array of cars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Car"
+  /cars/{id}:
+    get:
+      summary: Get a car with its latest position
+      operationId: getCarPosition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Car details with latest position
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CarPosition"
+        "404":
+          description: Car not found
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+components:
+  schemas:
+    Car:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        model:
+          type: string
+        vin:
+          type: string
+        trim_badging:
+          type: string
+          nullable: true
+        exterior_color:
+          type: string
+          nullable: true
+    Position:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        speed:
+          type: integer
+          nullable: true
+          description: Speed in km/h
+        battery_level:
+          type: integer
+          nullable: true
+        date:
+          type: string
+          format: date-time
+          description: Timestamp of this position reading
+    CarPosition:
+      type: object
+      properties:
+        car:
+          $ref: "#/components/schemas/Car"
+        position:
+          $ref: "#/components/schemas/Position"
