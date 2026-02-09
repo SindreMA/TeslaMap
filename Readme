@@ -1,31 +1,92 @@
-This is a project that will display a map of the last position of the Tesla car.
+# TeslaMap
 
-There are tree cars in the database, but this service will be configured to display only one of them.
+A web app that shows the last known position of your Tesla on an interactive map, powered by data from [TeslaMate](https://github.com/adriankumpf/teslamate).
 
-One car will be default, but you can change it via system env.
+## Features
 
-There will be a /select page where you can select the car to display. and then per car will have /car/{id} page to display the map of the last position of the car.
+- Live car position on a dark-themed Leaflet map with heading indicator
+- Car selector page when multiple vehicles are in the database
+- Browser geolocation to show distance and ETA from you to the car
+- Route visualization between your location and the car (via OSRM)
+- Battery level and speed display
+- Auto-refresh: position every 1 s, route every 30 s
 
+## Tech Stack
 
+- **Frontend** -- Vue 3, TypeScript, Vite, Leaflet
+- **Backend** -- Go 1.24, stdlib `net/http`, pgx (PostgreSQL)
+- **Deploy** -- Docker multi-stage build, single static binary, Kubernetes
 
-The map page will display the last position of the car.
-It will also display the last time the position was updated and the speed of the car at that time.
+The Vue app is embedded into the Go binary at build time (`//go:embed`), so the final image is just one executable serving both the API and the SPA.
 
-It will ask for location of the user, and if the user allows it, it will display the distance and eta from the car to the user.
+## Getting Started
 
-Its suppose to show like a "Your car is here" and "Your location is here" on the map, and a line between them.
+### Prerequisites
 
-Our data is being captured by teslamate.
+- Go 1.24+
+- Node 20+
+- A PostgreSQL database populated by TeslaMate
 
-The service will be deployed on Kubernetes.
+### Environment
 
-It will have car.sindrema.com as the domain name, and it will be accessible via https.
+Copy `.env.example` and fill in your values:
 
-Frontend should be in Vue.js and backend in Go.
+```
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USER=teslamate_owner
+DATABASE_PASS=secret
+DATABASE_NAME=teslamate
+DEFAULT_CAR_ID=1
+PORT=8080
+```
 
-If vue supports server side rendering, lets just query the data on the server side and render the page with the data, instead of doing it on the client side.
+### Run locally
 
-If not, then lets create a simple API in Go that will query the data from the database and return it as JSON, and then the frontend will fetch the data and render it.
+```bash
+# Frontend dev server (proxies /api to localhost:8080)
+cd frontend && npm install && npm run dev
 
-Just create a openapi spec for the API, and then we can use it to create the backend later.
+# Backend
+go run main.go
+```
 
+### Docker
+
+```bash
+docker build -t teslamap .
+docker run -p 8080:8080 --env-file .env teslamap
+```
+
+## API
+
+| Method | Endpoint          | Description                              |
+|--------|-------------------|------------------------------------------|
+| GET    | `/api/cars`       | List all cars                            |
+| GET    | `/api/cars/{id}`  | Car details with latest position/heading |
+| GET    | `/api/health`     | Health check (pings the database)        |
+
+Full spec in [openapi.yaml](openapi.yaml).
+
+## Project Structure
+
+```
+main.go                    # HTTP server, embeds frontend
+internal/
+  config/                  # Environment variable loading
+  db/                      # PostgreSQL connection & queries
+  handler/                 # API route handlers
+  model/                   # Car and Position structs
+frontend/
+  src/
+    views/                 # SelectCar, CarMap pages
+    components/            # MapView, CarCard, DistanceInfo
+    api/                   # Fetch client, types, OSRM routing
+    composables/           # useGeolocation hook
+```
+
+## Deployment
+
+CI/CD is handled by GitHub Actions (`.github/workflows/docker-publish.yml`). On push, the image is built, pushed to a Harbor registry, and the Kubernetes manifest is updated automatically.
+
+Domain: `car.sindrema.com` (HTTPS)
