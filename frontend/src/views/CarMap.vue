@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getCarPosition } from '@/api/client'
+import { fetchRoute, type RouteData } from '@/api/route'
 import type { CarPosition } from '@/api/types'
 import MapView from '@/components/MapView.vue'
 import DistanceInfo from '@/components/DistanceInfo.vue'
@@ -11,6 +12,7 @@ const route = useRoute()
 const data = ref<CarPosition | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(true)
+const routeData = ref<RouteData | null>(null)
 
 const { coords: userCoords } = useGeolocation()
 
@@ -27,15 +29,27 @@ async function fetchPosition() {
   }
 }
 
-let interval: ReturnType<typeof setInterval>
+let positionInterval: ReturnType<typeof setInterval>
+let routeInterval: ReturnType<typeof setInterval>
+
+async function updateRoute() {
+  if (!carCoords.value || !userCoords.value) return
+  routeData.value = await fetchRoute(
+    userCoords.value.lat, userCoords.value.lng,
+    carCoords.value.lat, carCoords.value.lng,
+  )
+}
 
 onMounted(() => {
   fetchPosition()
-  interval = setInterval(fetchPosition, 1000)
+  positionInterval = setInterval(fetchPosition, 1000)
+  // Refresh the route every 30 seconds (don't hammer OSRM on every position update)
+  routeInterval = setInterval(updateRoute, 30_000)
 })
 
 onUnmounted(() => {
-  clearInterval(interval)
+  clearInterval(positionInterval)
+  clearInterval(routeInterval)
 })
 
 const carCoords = computed(() => {
@@ -43,6 +57,13 @@ const carCoords = computed(() => {
   return {
     lat: data.value.position.latitude,
     lng: data.value.position.longitude,
+  }
+})
+
+// Fetch route immediately when both positions become available
+watch([carCoords, userCoords], () => {
+  if (carCoords.value && userCoords.value && !routeData.value) {
+    updateRoute()
   }
 })
 
@@ -71,11 +92,14 @@ const displayName = computed(() => {
           :user-coords="userCoords"
           :car="data.car"
           :heading="data.position?.heading ?? null"
+          :route-coords="routeData?.routeCoords ?? null"
         />
         <DistanceInfo
           :position="data.position!"
           :user-coords="userCoords"
           :car="data.car"
+          :route-distance="routeData?.distance_km ?? null"
+          :route-duration="routeData?.duration_min ?? null"
         />
       </div>
     </template>

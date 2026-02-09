@@ -35,6 +35,7 @@ const props = defineProps<{
   userCoords: { lat: number; lng: number } | null
   car: Car
   heading: number | null
+  routeCoords: [number, number][] | null
 }>()
 
 const carIcon = computed(() => buildCarIcon(props.heading ?? 0))
@@ -65,6 +66,7 @@ const bounds = computed(() => {
 })
 
 const polylinePoints = computed(() => {
+  if (props.routeCoords?.length) return props.routeCoords
   if (!props.userCoords) return []
   return [
     [props.carCoords.lat, props.carCoords.lng],
@@ -110,13 +112,13 @@ watch(() => props.userCoords, (newCoords) => {
         <LPopup>Your location is here</LPopup>
       </LMarker>
 
-      <!-- Line between car and user -->
+      <!-- Route between car and user -->
       <LPolyline
         v-if="userCoords"
         :lat-lngs="polylinePoints"
         :color="'#3b82f6'"
         :weight="3"
-        :dash-array="'8, 8'"
+        :dash-array="routeCoords?.length ? undefined : '8, 8'"
       />
     </LMap>
     <button class="toggle-satellite" @click="satellite = !satellite">

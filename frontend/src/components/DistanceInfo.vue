@@ -6,40 +6,13 @@ const props = defineProps<{
   position: Position
   userCoords: { lat: number; lng: number } | null
   car: Car
+  routeDistance: number | null
+  routeDuration: number | null
 }>()
 
-function haversineKm(
-  lat1: number, lng1: number,
-  lat2: number, lng2: number
-): number {
-  const R = 6371
-  const dLat = toRad(lat2 - lat1)
-  const dLng = toRad(lng2 - lng1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
+const distance = computed(() => props.routeDistance)
 
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180
-}
-
-const distance = computed(() => {
-  if (!props.userCoords) return null
-  return haversineKm(
-    props.position.latitude,
-    props.position.longitude,
-    props.userCoords.lat,
-    props.userCoords.lng
-  )
-})
-
-const etaMinutes = computed(() => {
-  if (distance.value === null) return null
-  // Rough ETA at 60 km/h average driving speed
-  return Math.round((distance.value / 60) * 60)
-})
+const etaMinutes = computed(() => props.routeDuration)
 
 const timeAgo = computed(() => {
   const now = Date.now()
