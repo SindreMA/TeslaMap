@@ -88,6 +88,7 @@ watch(() => props.userCoords, (newCoords) => {
 
 <template>
   <div class="map-container">
+  Hei
     <LMap
       ref="mapRef"
       :zoom="zoom"
