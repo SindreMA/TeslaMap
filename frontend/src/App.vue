@@ -9,14 +9,29 @@
   box-sizing: border-box;
 }
 
+html,
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0f0f0f;
-  color: #e0e0e0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--tm-font-ui);
+  background: var(--tm-bg);
+  color: var(--tm-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  height: 100%;
 }
 
 a {
-  color: #3b82f6;
+  color: var(--tm-accent);
   text-decoration: none;
+}
+
+button {
+  font-family: inherit;
 }
 </style>

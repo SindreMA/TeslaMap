@@ -1,0 +1,72 @@
+/* ============================================================
+   TeslaMap design tokens — from "TeslaMap Redesign" handoff.
+   A dark, premium tracker: near-black charcoals so the map is the
+   hero, a single electric-blue accent, and a battery traffic-light
+   scale (green / amber / red) — the only place extra color is allowed.
+   ============================================================ */
+:root {
+  /* surfaces */
+  --tm-bg: #0a0c0f;
+  --tm-surface: #11141a;
+  --tm-surface-2: #161b24;
+  --tm-glass: rgba(15, 19, 26, 0.82);
+  --tm-glass-soft: rgba(16, 20, 26, 0.7);
+  --tm-line: rgba(255, 255, 255, 0.08);
+  --tm-line-strong: rgba(255, 255, 255, 0.12);
+
+  /* accent + route + live pulse */
+  --tm-accent: #4d8bff;
+  --tm-accent-deep: #2a5fd6;
+  --tm-accent-glow: rgba(77, 139, 255, 0.45);
+
+  /* battery scale — the only extra color */
+  --tm-good: #34d399;
+  --tm-mid: #fbbf24;
+  --tm-low: #fb6a5b; /* also error */
+
+  /* text */
+  --tm-text: #eef1f6;
+  --tm-text-mid: #9aa6bb;
+  --tm-text-dim: #6c7689;
+
+  /* radius */
+  --tm-r-sm: 8px;
+  --tm-r-md: 14px;
+  --tm-r-lg: 20px;
+  --tm-r-sheet: 28px;
+  --tm-r-pill: 999px;
+
+  /* type */
+  --tm-font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --tm-font-display: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+/* ---- animations (global so Leaflet divIcon HTML can use them) ---- */
+@keyframes tmPulse {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  70% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes tmBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes tmShimmer {
+  0% { background-position: -260px 0; }
+  100% { background-position: 260px 0; }
+}
+@keyframes tmDash {
+  to { stroke-dashoffset: -28; }
+}
+@keyframes tmSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* small shared utility for the uppercase tracked labels */
+.tm-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tm-text-dim);
+}

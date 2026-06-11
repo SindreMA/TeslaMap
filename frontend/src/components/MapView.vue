@@ -1,34 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { LMap, LTileLayer, LMarker, LPopup, LPolyline } from '@vue-leaflet/vue-leaflet'
+import { LMap, LTileLayer, LMarker, LPolyline } from '@vue-leaflet/vue-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import type { Car } from '@/api/types'
-
-const SIZE = 48
-
-function buildCarIcon(heading: number): L.DivIcon {
-  const rot = heading // SVG points up = north, heading 0 = north
-  return L.divIcon({
-    html: `<img src="/cars/car-top.svg" style="width:${SIZE}px;height:${SIZE}px;transform:rotate(${rot}deg);filter:brightness(0) invert(1) drop-shadow(0 0 4px rgba(0,0,0,0.7));" />`,
-    className: '',
-    iconSize: [SIZE, SIZE],
-    iconAnchor: [SIZE / 2, SIZE / 2],
-    popupAnchor: [0, -SIZE / 2],
-  })
-}
-
-const personIcon = L.divIcon({
-  html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="36" height="36">
-    <circle cx="24" cy="24" r="22" fill="#166534" stroke="#22c55e" stroke-width="2"/>
-    <circle cx="24" cy="16" r="4" fill="white"/>
-    <path d="M18 32c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
-  </svg>`,
-  className: '',
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
-  popupAnchor: [0, -18],
-})
 
 const props = defineProps<{
   carCoords: { lat: number; lng: number }
@@ -36,23 +11,50 @@ const props = defineProps<{
   car: Car
   heading: number | null
   routeCoords: [number, number][] | null
+  satellite: boolean
 }>()
+
+/* ---- markers: glowing rotated car tile + pulsing "you" dot ---- */
+function buildCarIcon(heading: number): L.DivIcon {
+  return L.divIcon({
+    html: `
+      <div style="position:relative;width:44px;height:44px;">
+        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(77,139,255,0.45);animation:tmPulse 2.4s ease-out infinite;"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(${heading}deg);width:30px;height:30px;border-radius:10px;background:rgba(20,25,33,0.96);border:1.5px solid #4d8bff;box-shadow:0 0 16px rgba(77,139,255,0.7);display:flex;align-items:center;justify-content:center;">
+          <div style="width:11px;height:17px;border-radius:5px 5px 4px 4px;background:linear-gradient(#eef1f6,#c7d0df);"></div>
+        </div>
+      </div>`,
+    className: '',
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+  })
+}
+
+const userIcon = L.divIcon({
+  html: `
+    <div style="position:relative;width:30px;height:30px;">
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(255,255,255,0.5);animation:tmPulse 2.4s ease-out infinite;"></div>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#fff;border:2px solid #0d1016;box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>
+    </div>`,
+  className: '',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+})
 
 const carIcon = computed(() => buildCarIcon(props.heading ?? 0))
 
 const zoom = ref(14)
-const satellite = ref(false)
 
 const tileUrl = computed(() =>
-  satellite.value
+  props.satellite
     ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
 )
 
 const tileAttribution = computed(() =>
-  satellite.value
+  props.satellite
     ? '&copy; <a href="https://www.esri.com/">Esri</a>'
-    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
 )
 
 const center = computed(() => [props.carCoords.lat, props.carCoords.lng] as [number, number])
@@ -65,6 +67,8 @@ const bounds = computed(() => {
   ] as [[number, number], [number, number]]
 })
 
+const routeColor = computed(() => (props.satellite ? '#7fb0ff' : '#4d8bff'))
+
 const polylinePoints = computed(() => {
   if (props.routeCoords?.length) return props.routeCoords
   if (!props.userCoords) return []
@@ -74,27 +78,40 @@ const polylinePoints = computed(() => {
   ] as [number, number][]
 })
 
+const hasRoute = computed(() => !!props.routeCoords?.length)
+
 const mapRef = ref<InstanceType<typeof LMap> | null>(null)
 
-watch(() => props.userCoords, (newCoords) => {
-  if (newCoords && mapRef.value) {
-    const map = (mapRef.value as any).leafletObject
-    if (map) {
-      map.fitBounds(bounds.value, { padding: [50, 50] })
-    }
-  }
-})
+function leaflet(): L.Map | null {
+  return (mapRef.value as unknown as { leafletObject?: L.Map })?.leafletObject ?? null
+}
+
+function recenter() {
+  const map = leaflet()
+  if (!map) return
+  if (bounds.value) map.fitBounds(bounds.value, { padding: [60, 60] })
+  else map.setView(center.value, zoom.value)
+}
+
+// auto-fit once the user's location arrives
+watch(
+  () => props.userCoords,
+  (next) => {
+    if (next) recenter()
+  },
+)
+
+defineExpose({ recenter })
 </script>
 
 <template>
   <div class="map-container">
-  Hei
     <LMap
       ref="mapRef"
       :zoom="zoom"
       :center="center"
       :bounds="bounds"
-      :options="{ zoomControl: true }"
+      :options="{ zoomControl: false, attributionControl: true }"
       style="height: 100%; width: 100%"
     >
       <LTileLayer
@@ -103,54 +120,43 @@ watch(() => props.userCoords, (newCoords) => {
         :attribution="tileAttribution"
       />
 
-      <!-- Car marker -->
-      <LMarker :lat-lng="[carCoords.lat, carCoords.lng]" :icon="carIcon">
-        <LPopup>Your car is here</LPopup>
-      </LMarker>
-
-      <!-- User marker -->
-      <LMarker v-if="userCoords" :lat-lng="[userCoords.lat, userCoords.lng]" :icon="personIcon">
-        <LPopup>Your location is here</LPopup>
-      </LMarker>
-
-      <!-- Route between car and user -->
+      <!-- route: soft glow underlay + crisp line on top -->
+      <LPolyline
+        v-if="userCoords && hasRoute"
+        :lat-lngs="polylinePoints"
+        :color="routeColor"
+        :weight="13"
+        :opacity="0.22"
+      />
       <LPolyline
         v-if="userCoords"
         :lat-lngs="polylinePoints"
-        :color="'#3b82f6'"
-        :weight="3"
-        :dash-array="routeCoords?.length ? undefined : '8, 8'"
+        :color="routeColor"
+        :weight="hasRoute ? 4.5 : 3"
+        :opacity="hasRoute ? 0.9 : 0.7"
+        :dash-array="hasRoute ? undefined : '8, 10'"
       />
+
+      <LMarker :lat-lng="[carCoords.lat, carCoords.lng]" :icon="carIcon" />
+      <LMarker v-if="userCoords" :lat-lng="[userCoords.lat, userCoords.lng]" :icon="userIcon" />
     </LMap>
-    <button class="toggle-satellite" @click="satellite = !satellite">
-      {{ satellite ? 'Map' : 'Satellite' }}
-    </button>
   </div>
 </template>
 
 <style scoped>
 .map-container {
-  flex: 1;
-  min-height: 300px;
-  position: relative;
-}
-
-.toggle-satellite {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 1000;
-  padding: 6px 14px;
-  background: #1a1a1a;
-  color: #e0e0e0;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s;
+  inset: 0;
+  background: #0e1217;
 }
 
-.toggle-satellite:hover {
-  background: #2a2a2a;
+/* tidy up leaflet's default chrome to match the dark theme */
+.map-container :deep(.leaflet-control-attribution) {
+  background: rgba(10, 12, 15, 0.6);
+  color: var(--tm-text-dim);
+  font-size: 10px;
+}
+.map-container :deep(.leaflet-control-attribution a) {
+  color: var(--tm-text-mid);
 }
 </style>
