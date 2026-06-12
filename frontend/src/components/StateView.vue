@@ -15,6 +15,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 <template>
   <!-- SKELETON -->
   <div v-if="variant === 'skeleton'" class="overlay">
+    <router-link to="/select" class="back"><span class="chev">‹</span> Garage</router-link>
     <div class="sheet skel-sheet">
       <span class="grab"></span>
       <div class="skel-row">
@@ -34,6 +35,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
   <!-- ERROR -->
   <div v-else-if="variant === 'error'" class="overlay center">
     <div class="dim"></div>
+    <router-link to="/select" class="back"><span class="chev">‹</span> Garage</router-link>
     <div class="card">
       <div class="badge err"><span>!</span></div>
       <h3>Couldn't reach your car</h3>
@@ -45,6 +47,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 
   <!-- STALE / NO LIVE POSITION -->
   <div v-else class="overlay bottom">
+    <router-link to="/select" class="back"><span class="chev">‹</span> Garage</router-link>
     <div class="sheet stale-sheet">
       <span class="not-live"><span class="ledg"></span>NOT LIVE</span>
       <h3>No live position</h3>
@@ -64,7 +67,10 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 </template>
 
 <style scoped>
+/* The overlay itself must not eat clicks meant for the map chrome
+   underneath it — only its actual content (sheet / card / back) is interactive. */
 .overlay {
+  pointer-events: none;
   position: absolute;
   inset: 0;
   z-index: 1100;
@@ -87,8 +93,32 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
   background: rgba(10, 12, 15, 0.55);
 }
 
+/* back to garage — available in every state */
+.back {
+  pointer-events: auto;
+  position: absolute;
+  top: calc(46px + env(safe-area-inset-top));
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tm-glass-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--tm-r-pill);
+  padding: 8px 14px 8px 11px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tm-text);
+}
+.chev {
+  font-size: 15px;
+}
+
 /* sheets */
 .sheet {
+  pointer-events: auto;
   position: relative;
   background: var(--tm-glass);
   backdrop-filter: blur(28px);
@@ -133,6 +163,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 
 /* error */
 .card {
+  pointer-events: auto;
   position: relative;
   text-align: center;
   max-width: 320px;

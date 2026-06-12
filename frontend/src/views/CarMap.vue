@@ -145,7 +145,9 @@ const showMap = computed(() => !!carCoords.value)
       />
     </div>
 
-    <MapControls v-if="showMap" v-model:satellite="satellite" />
+    <!-- full map chrome (back + Map/Satellite toggle) only while live;
+         other states carry their own back link inside StateView -->
+    <MapControls v-if="phase === 'live'" v-model:satellite="satellite" />
 
     <!-- LIVE: recenter + arrival sheet docked at the bottom -->
     <div v-if="phase === 'live'" class="dock">
