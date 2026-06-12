@@ -1,26 +1,33 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { LMap, LTileLayer, LMarker, LPolyline } from '@vue-leaflet/vue-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import type { Car } from '@/api/types'
+import { useSmoothPosition, type Fix } from '@/composables/useSmoothPosition'
 
 const props = defineProps<{
-  carCoords: { lat: number; lng: number }
+  carFix: Fix
   userCoords: { lat: number; lng: number } | null
   car: Car
-  heading: number | null
   routeCoords: [number, number][] | null
   satellite: boolean
 }>()
 
-/* ---- markers: glowing rotated car tile + pulsing "you" dot ---- */
-function buildCarIcon(heading: number): L.DivIcon {
+const zoom = ref(14)
+// Captured once: the map frames here on first render and then stays put — it
+// must NOT follow every position update, or the whole map jumps. The car
+// marker glides within it instead; use the recenter button to re-frame.
+const initialCenter: [number, number] = [props.carFix.lat, props.carFix.lng]
+
+/* ---- imperative, gliding car marker (so the pulse never resets and we can
+       rotate without rebuilding the icon every frame) ---- */
+function buildCarIcon(): L.DivIcon {
   return L.divIcon({
     html: `
       <div style="position:relative;width:44px;height:44px;">
         <div style="position:absolute;inset:0;border-radius:50%;background:rgba(77,139,255,0.45);animation:tmPulse 2.4s ease-out infinite;"></div>
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(${heading}deg);width:30px;height:30px;border-radius:10px;background:rgba(20,25,33,0.96);border:1.5px solid #4d8bff;box-shadow:0 0 16px rgba(77,139,255,0.7);display:flex;align-items:center;justify-content:center;">
+        <div class="tm-rotor" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(0deg);width:30px;height:30px;border-radius:10px;background:rgba(20,25,33,0.96);border:1.5px solid #4d8bff;box-shadow:0 0 16px rgba(77,139,255,0.7);display:flex;align-items:center;justify-content:center;">
           <div style="width:11px;height:17px;border-radius:5px 5px 4px 4px;background:linear-gradient(#eef1f6,#c7d0df);"></div>
         </div>
       </div>`,
@@ -41,59 +48,84 @@ const userIcon = L.divIcon({
   iconAnchor: [15, 15],
 })
 
-const carIcon = computed(() => buildCarIcon(props.heading ?? 0))
+let map: L.Map | null = null
+let carMarker: L.Marker | null = null
+let rotor: HTMLElement | null = null
 
-const zoom = ref(14)
+const smooth = useSmoothPosition((lat, lng, heading) => {
+  carMarker?.setLatLng([lat, lng])
+  if (rotor) rotor.style.transform = `translate(-50%,-50%) rotate(${heading}deg)`
+})
 
+function onMapReady(m: L.Map) {
+  map = m
+  carMarker = L.marker(initialCenter, {
+    icon: buildCarIcon(),
+    interactive: false,
+    keyboard: false,
+    zIndexOffset: 1000,
+  }).addTo(m)
+  rotor = (carMarker.getElement()?.querySelector('.tm-rotor') as HTMLElement) ?? null
+  smooth.push({ ...props.carFix })
+  recenter()
+}
+
+// feed each new fix into the smoother (it glides the marker)
+watch(
+  () => props.carFix,
+  (f) => smooth.push({ lat: f.lat, lng: f.lng, heading: f.heading, t: f.t }),
+)
+
+// switching cars: drop buffered motion and snap to the new car
+watch(
+  () => props.car?.id,
+  () => {
+    smooth.reset()
+    smooth.push({ ...props.carFix })
+  },
+)
+
+/* ---- tiles ---- */
 const tileUrl = computed(() =>
   props.satellite
     ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
     : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
 )
-
 const tileAttribution = computed(() =>
   props.satellite
     ? '&copy; <a href="https://www.esri.com/">Esri</a>'
     : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
 )
 
-const center = computed(() => [props.carCoords.lat, props.carCoords.lng] as [number, number])
-
-const bounds = computed(() => {
-  if (!props.userCoords) return undefined
-  return [
-    [props.carCoords.lat, props.carCoords.lng],
-    [props.userCoords.lat, props.userCoords.lng],
-  ] as [[number, number], [number, number]]
-})
-
+/* ---- route ---- */
 const routeColor = computed(() => (props.satellite ? '#7fb0ff' : '#4d8bff'))
-
+const hasRoute = computed(() => !!props.routeCoords?.length)
 const polylinePoints = computed(() => {
   if (props.routeCoords?.length) return props.routeCoords
   if (!props.userCoords) return []
   return [
-    [props.carCoords.lat, props.carCoords.lng],
+    [props.carFix.lat, props.carFix.lng],
     [props.userCoords.lat, props.userCoords.lng],
   ] as [number, number][]
 })
 
-const hasRoute = computed(() => !!props.routeCoords?.length)
-
-const mapRef = ref<InstanceType<typeof LMap> | null>(null)
-
-function leaflet(): L.Map | null {
-  return (mapRef.value as unknown as { leafletObject?: L.Map })?.leafletObject ?? null
+/* ---- framing (only on demand, never per update) ---- */
+function boundsNow(): [[number, number], [number, number]] | null {
+  if (!props.userCoords) return null
+  return [
+    [props.carFix.lat, props.carFix.lng],
+    [props.userCoords.lat, props.userCoords.lng],
+  ]
 }
 
 function recenter() {
-  const map = leaflet()
   if (!map) return
-  if (bounds.value) map.fitBounds(bounds.value, { padding: [60, 60] })
-  else map.setView(center.value, zoom.value)
+  const b = boundsNow()
+  if (b) map.fitBounds(b, { padding: [60, 60] })
+  else map.setView([props.carFix.lat, props.carFix.lng], zoom.value)
 }
 
-// auto-fit once the user's location arrives
+// frame both pins once the user's location arrives (fires ~once)
 watch(
   () => props.userCoords,
   (next) => {
@@ -101,18 +133,21 @@ watch(
   },
 )
 
+onUnmounted(() => {
+  carMarker?.remove()
+})
+
 defineExpose({ recenter })
 </script>
 
 <template>
   <div class="map-container">
     <LMap
-      ref="mapRef"
       :zoom="zoom"
-      :center="center"
-      :bounds="bounds"
+      :center="initialCenter"
       :options="{ zoomControl: false, attributionControl: true }"
       style="height: 100%; width: 100%"
+      @ready="onMapReady"
     >
       <LTileLayer
         :key="satellite ? 'sat' : 'dark'"
@@ -137,7 +172,7 @@ defineExpose({ recenter })
         :dash-array="hasRoute ? undefined : '8, 10'"
       />
 
-      <LMarker :lat-lng="[carCoords.lat, carCoords.lng]" :icon="carIcon" />
+      <!-- car marker is added imperatively in onMapReady so it can glide -->
       <LMarker v-if="userCoords" :lat-lng="[userCoords.lat, userCoords.lng]" :icon="userIcon" />
     </LMap>
   </div>

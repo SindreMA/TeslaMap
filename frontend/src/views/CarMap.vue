@@ -85,6 +85,13 @@ const carCoords = computed(() => {
   }
 })
 
+// fix passed to the map: position + heading + event time, for smooth playback
+const carFix = computed(() => {
+  const p = data.value?.position
+  if (!p) return null
+  return { lat: p.latitude, lng: p.longitude, heading: p.heading, t: new Date(p.date).getTime() }
+})
+
 // Fetch route immediately when both positions become available
 watch([carCoords, userCoords], () => {
   if (carCoords.value && userCoords.value && !routeData.value) {
@@ -147,10 +154,9 @@ const showMap = computed(() => !!carCoords.value)
     <div v-if="showMap" class="map" :class="{ muted: phase === 'stale' }">
       <MapView
         ref="mapViewRef"
-        :car-coords="carCoords!"
+        :car-fix="carFix!"
         :user-coords="userCoords"
         :car="data!.car"
-        :heading="data!.position?.heading ?? null"
         :route-coords="routeData?.routeCoords ?? null"
         :satellite="satellite"
       />
