@@ -38,6 +38,30 @@ paths:
                 $ref: "#/components/schemas/CarPosition"
         "404":
           description: Car not found
+  /cars/{id}/stream:
+    get:
+      summary: Stream a car's live position over Server-Sent Events
+      description: >
+        Long-lived `text/event-stream` connection. Each `data:` frame is a
+        CarPosition JSON object, emitted whenever the latest position changes.
+        Comment lines (`: keepalive`) are sent periodically to keep the
+        connection alive through proxies.
+      operationId: streamCarPosition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event stream of CarPosition frames
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/CarPosition"
+        "404":
+          description: Car not found
   /health:
     get:
       summary: Health check
@@ -81,6 +105,11 @@ components:
         battery_level:
           type: integer
           nullable: true
+        heading:
+          type: number
+          format: double
+          nullable: true
+          description: Bearing in degrees derived from the last two fixes
         date:
           type: string
           format: date-time

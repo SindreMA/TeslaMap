@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getCarPosition } from '@/api/client'
+import { streamCarPosition } from '@/api/client'
 import { fetchRoute, type RouteData } from '@/api/route'
 import type { CarPosition } from '@/api/types'
 import MapView from '@/components/MapView.vue'
@@ -28,21 +28,28 @@ const { coords: userCoords } = useGeolocation()
 
 const carId = computed(() => Number(route.params.id))
 
-async function fetchPosition() {
-  try {
-    data.value = await getCarPosition(carId.value)
-    error.value = null
-    retryIn.value = RETRY_SECONDS
-  } catch {
-    error.value = 'Failed to load car position'
-    retryIn.value = retryIn.value > 1 ? retryIn.value - 1 : RETRY_SECONDS
-  } finally {
-    loading.value = false
-  }
-}
-
-let positionInterval: ReturnType<typeof setInterval>
+let stopStream: (() => void) | null = null
 let routeInterval: ReturnType<typeof setInterval>
+let retryTicker: ReturnType<typeof setInterval>
+
+// Subscribe to the live position stream (SSE, with a polling fallback baked
+// into the client). New data clears any error; a dropped connection surfaces
+// an error only while we have nothing to show — EventSource reconnects itself.
+function connect() {
+  stopStream?.()
+  stopStream = streamCarPosition(carId.value, {
+    onData: (cp) => {
+      data.value = cp
+      error.value = null
+      retryIn.value = RETRY_SECONDS
+      loading.value = false
+    },
+    onError: () => {
+      loading.value = false
+      if (!data.value) error.value = 'Failed to load car position'
+    },
+  })
+}
 
 async function updateRoute() {
   if (!carCoords.value || !userCoords.value) return
@@ -55,15 +62,19 @@ async function updateRoute() {
 }
 
 onMounted(() => {
-  fetchPosition()
-  positionInterval = setInterval(fetchPosition, 1000)
+  connect()
+  // cosmetic countdown for the error state's "Retrying in Ns…" line
+  retryTicker = setInterval(() => {
+    if (error.value) retryIn.value = retryIn.value > 1 ? retryIn.value - 1 : RETRY_SECONDS
+  }, 1000)
   // Refresh the route every 30 seconds (don't hammer OSRM on every position update)
   routeInterval = setInterval(updateRoute, 30_000)
 })
 
 onUnmounted(() => {
-  clearInterval(positionInterval)
+  stopStream?.()
   clearInterval(routeInterval)
+  clearInterval(retryTicker)
 })
 
 const carCoords = computed(() => {
@@ -174,7 +185,7 @@ const showMap = computed(() => !!carCoords.value)
       variant="error"
       :message="error"
       :retry-seconds="retryIn"
-      @retry="fetchPosition"
+      @retry="connect"
     />
     <StateView
       v-else-if="phase === 'stale' || phase === 'no-position'"

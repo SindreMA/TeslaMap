@@ -29,6 +29,7 @@ func main() {
 	// API routes
 	mux.HandleFunc("GET /api/cars", h.ListCars)
 	mux.HandleFunc("GET /api/cars/{id}", h.GetCarPosition)
+	mux.HandleFunc("GET /api/cars/{id}/stream", h.StreamCarPosition)
 	mux.HandleFunc("GET /api/health", h.Health)
 
 	// Default redirect
